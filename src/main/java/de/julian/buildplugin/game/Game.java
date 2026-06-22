@@ -2,9 +2,11 @@ package de.julian.buildplugin.game;
 
 import de.julian.buildplugin.manager.AreaManager;
 import de.julian.buildplugin.manager.WallManager;
+import de.julian.buildplugin.world.ArenaWorldManager;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
+import org.bukkit.GameMode;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
@@ -19,38 +21,35 @@ public class Game {
     private final Plugin plugin;
     private final AreaManager areaManager;
     private WallManager wallManager;
+    private final ArenaWorldManager arenaWorldManager;
 
     private GameState state = GameState.WAITING;
     private final List<Team> teams = new ArrayList<>();
 
     private int buildTime;
     private int votingTime;
-    private int areaSize;
     private int wallHeight;
-    private int centerX;
-    private int centerZ;
-    private World world;
     private boolean soloMode;
+
+    // Arena is always at 0,0 in the void world
+    private static final int CENTER_X = 0;
+    private static final int CENTER_Z = 0;
 
     private BukkitTask countdownTask;
     private int remainingSeconds;
 
     public Game(Plugin plugin) {
         this.plugin = plugin;
-        this.areaManager = new AreaManager();
+        this.arenaWorldManager = new ArenaWorldManager(plugin);
         loadConfig();
+        this.areaManager = new AreaManager(plugin);
         this.wallManager = new WallManager(plugin, wallHeight);
     }
 
     private void loadConfig() {
         buildTime = plugin.getConfig().getInt("game.build-time", 3600);
         votingTime = plugin.getConfig().getInt("game.voting-time", 600);
-        areaSize = plugin.getConfig().getInt("game.area-size", 128);
-        wallHeight = plugin.getConfig().getInt("game.wall-height", 320);
-        centerX = plugin.getConfig().getInt("game.center-x", 0);
-        centerZ = plugin.getConfig().getInt("game.center-z", 0);
-        String worldName = plugin.getConfig().getString("game.world", "world");
-        world = Bukkit.getWorld(worldName);
+        wallHeight = plugin.getConfig().getInt("game.wall-height", 64);
         soloMode = plugin.getConfig().getString("game.mode", "solo").equals("solo");
     }
 
@@ -60,31 +59,45 @@ public class Game {
         wallManager = new WallManager(plugin, wallHeight);
     }
 
+    public World getArenaWorld() {
+        return arenaWorldManager.getOrCreateArenaWorld();
+    }
+
     public void startBuildPhase() {
         if (state != GameState.WAITING) return;
         if (teams.isEmpty()) return;
 
-        List<BuildArea> areas = areaManager.createGrid(world, centerX, centerZ, areaSize);
+        int areaSize = plugin.getConfig().getInt("game.area-size", 128);
+        World arenaWorld = arenaWorldManager.getOrCreateArenaWorld();
+
+        List<BuildArea> areas = areaManager.createGrid(arenaWorld, CENTER_X, CENTER_Z, areaSize);
 
         for (int i = 0; i < teams.size(); i++) {
             Team team = teams.get(i);
             BuildArea area = areas.get(i % areas.size());
             team.setArea(area);
+            // Generate the flat platform for this team's area
+            areaManager.generatePlatform(area);
         }
 
-        wallManager.placeOuterWalls(world, centerX, centerZ, areaSize * 4);
-        wallManager.placeInnerWalls(world, centerX, centerZ, areaSize * 4);
+        int totalSize = (areaSize + 1) * 2;
+        wallManager.placeOuterWalls(arenaWorld, CENTER_X, CENTER_Z, totalSize);
+        wallManager.placeInnerWalls(arenaWorld, CENTER_X, CENTER_Z, totalSize);
 
-        for (Team team : teams) {
-            for (UUID uuid : team.getPlayers()) {
-                Player player = Bukkit.getPlayer(uuid);
-                if (player != null) {
-                    areaManager.teleportToArea(player, team.getArea());
-                    player.setAllowFlight(false);
-                    player.sendMessage(Component.text("Das Spiel beginnt! Du hast " + formatTime(buildTime) + " zum Bauen!", NamedTextColor.GREEN));
+        // Give players a moment for platforms to generate before teleporting
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            for (Team team : teams) {
+                for (UUID uuid : team.getPlayers()) {
+                    Player player = Bukkit.getPlayer(uuid);
+                    if (player != null) {
+                        areaManager.teleportToArea(player, team.getArea());
+                        player.setGameMode(GameMode.SURVIVAL);
+                        player.setAllowFlight(false);
+                        player.sendMessage(Component.text("Das Spiel beginnt! Du hast " + formatTime(buildTime) + " zum Bauen!", NamedTextColor.GREEN));
+                    }
                 }
             }
-        }
+        }, 40L); // 2 second delay for platform generation
 
         broadcastAll(Component.text("=== BUILD PHASE GESTARTET ===", NamedTextColor.GOLD));
         state = GameState.BUILDING;
@@ -94,7 +107,11 @@ public class Game {
     public void startVotingPhase() {
         if (state != GameState.BUILDING) return;
 
-        wallManager.removeOuterWalls(world, centerX, centerZ, areaSize * 4);
+        int areaSize = plugin.getConfig().getInt("game.area-size", 128);
+        World arenaWorld = arenaWorldManager.getOrCreateArenaWorld();
+        int totalSize = (areaSize + 1) * 2;
+
+        wallManager.removeOuterWalls(arenaWorld, CENTER_X, CENTER_Z, totalSize);
 
         for (Team team : teams) {
             for (UUID uuid : team.getPlayers()) {
@@ -108,15 +125,13 @@ public class Game {
         }
 
         broadcastAll(Component.text("=== VOTING PHASE GESTARTET ===", NamedTextColor.GOLD));
-        broadcastAll(Component.text("Nutze /vote <1-5> um fuer einen Build abzustimmen!", NamedTextColor.YELLOW));
+        broadcastAll(Component.text("Fliege zu einem Build und tippe /vote <1-5>!", NamedTextColor.YELLOW));
         state = GameState.VOTING;
         startCountdown(votingTime, this::endGame);
     }
 
     public void endGame() {
-        if (countdownTask != null) {
-            countdownTask.cancel();
-        }
+        if (countdownTask != null) countdownTask.cancel();
         state = GameState.ENDED;
 
         teams.sort((a, b) -> b.getScore() - a.getScore());
@@ -126,35 +141,46 @@ public class Game {
 
         int rank = 1;
         for (Team team : teams) {
-            String playerNames = getPlayerNames(team);
-            broadcastAll(Component.text(rank + ". " + team.getName() + " (" + playerNames + "): " + team.getScore() + " Punkte", NamedTextColor.AQUA));
+            broadcastAll(Component.text(rank + ". " + team.getName() + " (" + getPlayerNames(team) + "): " + team.getScore() + " Punkte", NamedTextColor.AQUA));
             rank++;
         }
 
-        for (Team team : teams) {
-            for (UUID uuid : team.getPlayers()) {
-                Player player = Bukkit.getPlayer(uuid);
-                if (player != null) {
-                    player.setAllowFlight(false);
-                    player.setFlying(false);
+        // Teleport players back to main world after 10 seconds
+        World mainWorld = Bukkit.getWorlds().get(0);
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            for (Team team : teams) {
+                for (UUID uuid : team.getPlayers()) {
+                    Player player = Bukkit.getPlayer(uuid);
+                    if (player != null) {
+                        player.setAllowFlight(false);
+                        player.setFlying(false);
+                        player.teleport(mainWorld.getSpawnLocation());
+                    }
                 }
             }
-        }
+            teams.clear();
+            state = GameState.WAITING;
+        }, 200L); // 10 seconds
     }
 
     public void stopGame() {
-        if (countdownTask != null) {
-            countdownTask.cancel();
-        }
-        wallManager.removeOuterWalls(world, centerX, centerZ, areaSize * 4);
-        wallManager.removeInnerWalls(world, centerX, centerZ, areaSize * 4);
+        if (countdownTask != null) countdownTask.cancel();
 
+        int areaSize = plugin.getConfig().getInt("game.area-size", 128);
+        World arenaWorld = arenaWorldManager.getOrCreateArenaWorld();
+        int totalSize = (areaSize + 1) * 2;
+
+        wallManager.removeOuterWalls(arenaWorld, CENTER_X, CENTER_Z, totalSize);
+        wallManager.removeInnerWalls(arenaWorld, CENTER_X, CENTER_Z, totalSize);
+
+        World mainWorld = Bukkit.getWorlds().get(0);
         for (Team team : teams) {
             for (UUID uuid : team.getPlayers()) {
                 Player player = Bukkit.getPlayer(uuid);
                 if (player != null) {
                     player.setAllowFlight(false);
                     player.setFlying(false);
+                    player.teleport(mainWorld.getSpawnLocation());
                 }
             }
         }
@@ -165,13 +191,16 @@ public class Game {
     }
 
     public boolean submitVote(Player voter, int points) {
-        if (state != GameState.VOTING) return false;
+        if (state != GameState.VOTING) {
+            voter.sendMessage(Component.text("Abstimmen ist nur in der Voting-Phase moeglich!", NamedTextColor.RED));
+            return false;
+        }
 
         Team voterTeam = getTeamOfPlayer(voter.getUniqueId());
         Team targetTeam = areaManager.getTeamAtLocation(voter.getLocation(), teams);
 
         if (targetTeam == null) {
-            voter.sendMessage(Component.text("Stehe in einem Build-Bereich, um abzustimmen!", NamedTextColor.RED));
+            voter.sendMessage(Component.text("Stehe in einem Build-Bereich um abzustimmen!", NamedTextColor.RED));
             return false;
         }
         if (targetTeam.equals(voterTeam)) {
@@ -190,7 +219,9 @@ public class Game {
 
     public Team addPlayerToTeam(Player player, String teamName) {
         Team team = getOrCreateTeam(teamName);
-        team.addPlayer(player);
+        if (!team.hasPlayer(player.getUniqueId())) {
+            team.addPlayer(player);
+        }
         return team;
     }
 
@@ -237,8 +268,7 @@ public class Game {
     private String getPlayerNames(Team team) {
         StringBuilder sb = new StringBuilder();
         for (UUID uuid : team.getPlayers()) {
-            Player p = Bukkit.getOfflinePlayer(uuid).getPlayer();
-            String name = p != null ? p.getName() : Bukkit.getOfflinePlayer(uuid).getName();
+            String name = Bukkit.getOfflinePlayer(uuid).getName();
             if (name != null) {
                 if (!sb.isEmpty()) sb.append(", ");
                 sb.append(name);
@@ -250,7 +280,8 @@ public class Game {
     private String formatTime(int seconds) {
         int min = seconds / 60;
         int sec = seconds % 60;
-        if (min > 0) return min + "m " + sec + "s";
+        if (min > 0 && sec > 0) return min + "m " + sec + "s";
+        if (min > 0) return min + "m";
         return sec + "s";
     }
 
@@ -260,7 +291,6 @@ public class Game {
     public int getVotingTime() { return votingTime; }
     public boolean isSoloMode() { return soloMode; }
     public int getRemainingSeconds() { return remainingSeconds; }
-
     public void setBuildTime(int seconds) { this.buildTime = seconds; }
     public void setVotingTime(int seconds) { this.votingTime = seconds; }
     public void setSoloMode(boolean solo) { this.soloMode = solo; }

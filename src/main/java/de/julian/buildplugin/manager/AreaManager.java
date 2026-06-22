@@ -3,35 +3,102 @@ package de.julian.buildplugin.manager;
 import de.julian.buildplugin.game.BuildArea;
 import de.julian.buildplugin.game.Team;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
+import org.bukkit.plugin.Plugin;
+import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.ArrayList;
 import java.util.List;
 
 public class AreaManager {
 
+    // Platform Y levels in the void world
+    public static final int PLATFORM_Y = 64;       // grass surface
+    public static final int BEDROCK_Y = 63;        // bedrock floor
+    public static final int SPAWN_Y = PLATFORM_Y + 1;
+
+    private final Plugin plugin;
+
+    public AreaManager(Plugin plugin) {
+        this.plugin = plugin;
+    }
+
+    /**
+     * Calculates the 4 build areas in a 2x2 grid around (centerX, centerZ).
+     * Layout (each area is areaSize x areaSize):
+     *   [Team1][Team2]
+     *   [Team3][Team4]
+     * A 1-block gap at center serves as the inner wall column.
+     */
     public List<BuildArea> createGrid(World world, int centerX, int centerZ, int areaSize) {
         List<BuildArea> areas = new ArrayList<>();
 
-        // Team 1: top-left
-        areas.add(new BuildArea(world, centerX - areaSize * 2, centerX - areaSize, centerZ - areaSize * 2, centerZ - areaSize));
-        // Team 2: top-right
-        areas.add(new BuildArea(world, centerX + areaSize, centerX + areaSize * 2, centerZ - areaSize * 2, centerZ - areaSize));
-        // Team 3: bottom-left
-        areas.add(new BuildArea(world, centerX - areaSize * 2, centerX - areaSize, centerZ + areaSize, centerZ + areaSize * 2));
-        // Team 4: bottom-right
-        areas.add(new BuildArea(world, centerX + areaSize, centerX + areaSize * 2, centerZ + areaSize, centerZ + areaSize * 2));
+        // Team 1: top-left   (negative X, negative Z)
+        areas.add(new BuildArea(world, centerX - areaSize - 1, centerX - 1, centerZ - areaSize - 1, centerZ - 1));
+        // Team 2: top-right  (positive X, negative Z)
+        areas.add(new BuildArea(world, centerX + 1, centerX + areaSize + 1, centerZ - areaSize - 1, centerZ - 1));
+        // Team 3: bottom-left (negative X, positive Z)
+        areas.add(new BuildArea(world, centerX - areaSize - 1, centerX - 1, centerZ + 1, centerZ + areaSize + 1));
+        // Team 4: bottom-right (positive X, positive Z)
+        areas.add(new BuildArea(world, centerX + 1, centerX + areaSize + 1, centerZ + 1, centerZ + areaSize + 1));
 
         return areas;
     }
 
+    /**
+     * Generates a flat bedrock + grass platform for a build area in the void world.
+     * Runs async in chunks to avoid lag.
+     */
+    public void generatePlatform(BuildArea area) {
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                World world = area.getWorld();
+                for (int x = area.getMinX(); x <= area.getMaxX(); x++) {
+                    for (int z = area.getMinZ(); z <= area.getMaxZ(); z++) {
+                        final int fx = x, fz = z;
+                        new BukkitRunnable() {
+                            @Override
+                            public void run() {
+                                world.getBlockAt(fx, BEDROCK_Y, fz).setType(Material.BEDROCK);
+                                world.getBlockAt(fx, PLATFORM_Y, fz).setType(Material.GRASS_BLOCK);
+                            }
+                        }.runTask(plugin);
+                    }
+                }
+            }
+        }.runTaskAsynchronously(plugin);
+    }
+
+    /**
+     * Clears all blocks above the platform (for arena reset between games).
+     */
+    public void clearPlatform(BuildArea area, int maxHeight) {
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                World world = area.getWorld();
+                for (int x = area.getMinX(); x <= area.getMaxX(); x++) {
+                    for (int z = area.getMinZ(); z <= area.getMaxZ(); z++) {
+                        final int fx = x, fz = z;
+                        new BukkitRunnable() {
+                            @Override
+                            public void run() {
+                                for (int y = SPAWN_Y; y <= maxHeight; y++) {
+                                    world.getBlockAt(fx, y, fz).setType(Material.AIR);
+                                }
+                            }
+                        }.runTask(plugin);
+                    }
+                }
+            }
+        }.runTaskAsynchronously(plugin);
+    }
+
     public void teleportToArea(Player player, BuildArea area) {
-        int y = area.getWorld().getHighestBlockYAt(
-                (area.getMinX() + area.getMaxX()) / 2,
-                (area.getMinZ() + area.getMaxZ()) / 2
-        ) + 1;
-        Location spawnLoc = area.getCenter(y);
+        Location spawnLoc = area.getCenter(SPAWN_Y);
         player.teleport(spawnLoc);
     }
 

@@ -29,7 +29,7 @@ public class WallManager {
         new BukkitRunnable() {
             @Override
             public void run() {
-                for (int y = 0; y < wallHeight; y++) {
+                for (int y = de.julian.buildplugin.manager.AreaManager.BEDROCK_Y; y < de.julian.buildplugin.manager.AreaManager.BEDROCK_Y + wallHeight; y++) {
                     for (int x = minX; x <= maxX; x++) {
                         setBlock(world, x, y, minZ, Material.BARRIER);
                         setBlock(world, x, y, maxZ, Material.BARRIER);
@@ -53,7 +53,7 @@ public class WallManager {
         new BukkitRunnable() {
             @Override
             public void run() {
-                for (int y = 0; y < wallHeight; y++) {
+                for (int y = de.julian.buildplugin.manager.AreaManager.BEDROCK_Y; y < de.julian.buildplugin.manager.AreaManager.BEDROCK_Y + wallHeight; y++) {
                     for (int x = minX; x <= maxX; x++) {
                         removeBarrier(world, x, y, minZ);
                         removeBarrier(world, x, y, maxZ);
@@ -73,7 +73,7 @@ public class WallManager {
         new BukkitRunnable() {
             @Override
             public void run() {
-                for (int y = 0; y < wallHeight; y++) {
+                for (int y = de.julian.buildplugin.manager.AreaManager.BEDROCK_Y; y < de.julian.buildplugin.manager.AreaManager.BEDROCK_Y + wallHeight; y++) {
                     // Vertical divider (along Z axis at centerX)
                     for (int z = centerZ - half; z <= centerZ + half; z++) {
                         setBlock(world, centerX, y, z, Material.BARRIER);
@@ -93,7 +93,7 @@ public class WallManager {
         new BukkitRunnable() {
             @Override
             public void run() {
-                for (int y = 0; y < wallHeight; y++) {
+                for (int y = de.julian.buildplugin.manager.AreaManager.BEDROCK_Y; y < de.julian.buildplugin.manager.AreaManager.BEDROCK_Y + wallHeight; y++) {
                     for (int z = centerZ - half; z <= centerZ + half; z++) {
                         removeBarrier(world, centerX, y, z);
                     }

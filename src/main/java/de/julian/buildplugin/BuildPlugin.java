@@ -7,6 +7,9 @@ import de.julian.buildplugin.gui.NPCJoinGUI;
 import de.julian.buildplugin.gui.SettingsGUI;
 import de.julian.buildplugin.listeners.GameListener;
 import de.julian.buildplugin.npc.NPCManager;
+import de.julian.buildplugin.world.ArenaWorldManager;
+import de.julian.buildplugin.world.VoidGenerator;
+import org.bukkit.generator.ChunkGenerator;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.Objects;
@@ -33,21 +36,31 @@ public class BuildPlugin extends JavaPlugin {
         Objects.requireNonNull(getCommand("build")).setExecutor(new BuildCommand(game, settingsGUI, npcManager));
         Objects.requireNonNull(getCommand("vote")).setExecutor(new VoteCommand(game));
 
-        // Load saved NPCs after world is ready (1 tick delay)
-        getServer().getScheduler().runTaskLater(this, npcManager::loadFromConfig, 1L);
+        // Create arena world on startup, load NPCs after 1 tick
+        getServer().getScheduler().runTaskLater(this, () -> {
+            game.getArenaWorld();
+            npcManager.loadFromConfig();
+        }, 1L);
 
-        getLogger().info("BuildPlugin wurde aktiviert!");
+        getLogger().info("BuildPlugin aktiviert! Arena-Welt: " + ArenaWorldManager.WORLD_NAME);
     }
 
     @Override
     public void onDisable() {
-        if (game != null) {
-            game.stopGame();
+        if (game != null) game.stopGame();
+        if (npcManager != null) npcManager.removeAllNPCs();
+        getLogger().info("BuildPlugin deaktiviert.");
+    }
+
+    /**
+     * Registers the VoidGenerator for the arena world so it survives server restarts.
+     */
+    @Override
+    public ChunkGenerator getDefaultWorldGenerator(String worldName, String id) {
+        if (ArenaWorldManager.WORLD_NAME.equals(worldName)) {
+            return new VoidGenerator();
         }
-        if (npcManager != null) {
-            npcManager.removeAllNPCs();
-        }
-        getLogger().info("BuildPlugin wurde deaktiviert!");
+        return null;
     }
 
     public Game getGame() { return game; }
