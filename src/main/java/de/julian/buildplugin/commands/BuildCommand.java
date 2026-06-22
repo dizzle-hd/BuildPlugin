@@ -3,6 +3,8 @@ package de.julian.buildplugin.commands;
 import de.julian.buildplugin.game.Game;
 import de.julian.buildplugin.game.GameState;
 import de.julian.buildplugin.gui.SettingsGUI;
+import de.julian.buildplugin.npc.NPCData;
+import de.julian.buildplugin.npc.NPCManager;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
@@ -16,10 +18,12 @@ public class BuildCommand implements CommandExecutor {
 
     private final Game game;
     private final SettingsGUI settingsGUI;
+    private final NPCManager npcManager;
 
-    public BuildCommand(Game game, SettingsGUI settingsGUI) {
+    public BuildCommand(Game game, SettingsGUI settingsGUI, NPCManager npcManager) {
         this.game = game;
         this.settingsGUI = settingsGUI;
+        this.npcManager = npcManager;
     }
 
     @Override
@@ -43,7 +47,7 @@ public class BuildCommand implements CommandExecutor {
                     return true;
                 }
                 if (game.getTeams().isEmpty()) {
-                    player.sendMessage(Component.text("Keine Spieler hinzugefuegt! Nutze /build addplayer <spieler> <team>", NamedTextColor.RED));
+                    player.sendMessage(Component.text("Keine Spieler hinzugefuegt! Tritt ueber einen NPC bei oder nutze /build addplayer", NamedTextColor.RED));
                     return true;
                 }
                 game.startBuildPhase();
@@ -71,11 +75,12 @@ public class BuildCommand implements CommandExecutor {
                     player.sendMessage(Component.text("Spieler '" + args[1] + "' nicht gefunden.", NamedTextColor.RED));
                     return true;
                 }
-                String teamName = args[2];
-                game.addPlayerToTeam(target, teamName);
-                player.sendMessage(Component.text(target.getName() + " wurde Team '" + teamName + "' hinzugefuegt.", NamedTextColor.GREEN));
-                target.sendMessage(Component.text("Du wurdest Team '" + teamName + "' hinzugefuegt.", NamedTextColor.GREEN));
+                game.addPlayerToTeam(target, args[2]);
+                player.sendMessage(Component.text(target.getName() + " wurde Team '" + args[2] + "' hinzugefuegt.", NamedTextColor.GREEN));
+                target.sendMessage(Component.text("Du wurdest Team '" + args[2] + "' hinzugefuegt.", NamedTextColor.GREEN));
             }
+
+            case "npc" -> handleNPCCommand(player, args);
 
             case "status" -> {
                 player.sendMessage(Component.text("=== BuildPlugin Status ===", NamedTextColor.GOLD));
@@ -84,6 +89,7 @@ public class BuildCommand implements CommandExecutor {
                 if (game.getState() == GameState.BUILDING || game.getState() == GameState.VOTING) {
                     player.sendMessage(Component.text("Verbleibende Zeit: " + formatTime(game.getRemainingSeconds()), NamedTextColor.YELLOW));
                 }
+                player.sendMessage(Component.text("NPCs: " + npcManager.getNPCs().size(), NamedTextColor.WHITE));
             }
 
             default -> sendHelp(player);
@@ -92,13 +98,71 @@ public class BuildCommand implements CommandExecutor {
         return true;
     }
 
+    private void handleNPCCommand(Player player, String[] args) {
+        if (args.length < 2) {
+            player.sendMessage(Component.text("Verwendung: /build npc <place|remove|list>", NamedTextColor.RED));
+            return;
+        }
+
+        switch (args[1].toLowerCase()) {
+            case "place" -> {
+                if (args.length < 3) {
+                    player.sendMessage(Component.text("Verwendung: /build npc place <minuten>", NamedTextColor.RED));
+                    player.sendMessage(Component.text("Erlaubte Werte: 30, 45, 60, 90, 120", NamedTextColor.GRAY));
+                    return;
+                }
+                int minutes;
+                try {
+                    minutes = Integer.parseInt(args[2]);
+                } catch (NumberFormatException e) {
+                    player.sendMessage(Component.text("Ungueltige Minutenzahl.", NamedTextColor.RED));
+                    return;
+                }
+                if (minutes != 30 && minutes != 45 && minutes != 60 && minutes != 90 && minutes != 120) {
+                    player.sendMessage(Component.text("Erlaubte Werte: 30, 45, 60, 90, 120", NamedTextColor.RED));
+                    return;
+                }
+                NPCData npc = npcManager.spawnNPC(player.getLocation(), minutes);
+                player.sendMessage(Component.text("NPC fuer " + minutes + " Minuten wurde an deiner Position platziert!", NamedTextColor.GREEN));
+            }
+
+            case "remove" -> {
+                NPCData removed = npcManager.removeNearestNPC(player.getLocation(), 10.0);
+                if (removed == null) {
+                    player.sendMessage(Component.text("Kein NPC in der Naehe (max. 10 Bloecke).", NamedTextColor.RED));
+                } else {
+                    player.sendMessage(Component.text("NPC (" + removed.getBuildTimeMinutes() + " min) wurde entfernt.", NamedTextColor.GREEN));
+                }
+            }
+
+            case "list" -> {
+                if (npcManager.getNPCs().isEmpty()) {
+                    player.sendMessage(Component.text("Keine NPCs vorhanden.", NamedTextColor.YELLOW));
+                    return;
+                }
+                player.sendMessage(Component.text("=== Platzierte NPCs ===", NamedTextColor.GOLD));
+                for (NPCData npc : npcManager.getNPCs()) {
+                    player.sendMessage(Component.text("- " + npc.getBuildTimeMinutes() + " min @ "
+                            + npc.getWorldName() + " "
+                            + (int) npc.getX() + "/" + (int) npc.getY() + "/" + (int) npc.getZ(),
+                            NamedTextColor.WHITE));
+                }
+            }
+
+            default -> player.sendMessage(Component.text("Verwendung: /build npc <place|remove|list>", NamedTextColor.RED));
+        }
+    }
+
     private void sendHelp(Player player) {
         player.sendMessage(Component.text("=== BuildPlugin Befehle ===", NamedTextColor.GOLD));
-        player.sendMessage(Component.text("/build gui - Einstellungs-GUI oeffnen", NamedTextColor.WHITE));
+        player.sendMessage(Component.text("/build gui - Einstellungs-GUI", NamedTextColor.WHITE));
         player.sendMessage(Component.text("/build start - Spiel starten", NamedTextColor.WHITE));
         player.sendMessage(Component.text("/build stop - Spiel abbrechen", NamedTextColor.WHITE));
         player.sendMessage(Component.text("/build addplayer <spieler> <team> - Spieler hinzufuegen", NamedTextColor.WHITE));
-        player.sendMessage(Component.text("/build status - Spielstatus anzeigen", NamedTextColor.WHITE));
+        player.sendMessage(Component.text("/build npc place <30|45|60|90|120> - NPC platzieren", NamedTextColor.WHITE));
+        player.sendMessage(Component.text("/build npc remove - Naechsten NPC entfernen", NamedTextColor.WHITE));
+        player.sendMessage(Component.text("/build npc list - Alle NPCs auflisten", NamedTextColor.WHITE));
+        player.sendMessage(Component.text("/build status - Spielstatus", NamedTextColor.WHITE));
     }
 
     private String formatTime(int seconds) {
