@@ -31,8 +31,13 @@ public class BuildPlugin extends JavaPlugin {
                 new GameListener(game, settingsGUI, queueManager), this
         );
 
-        Objects.requireNonNull(getCommand("build")).setExecutor(new BuildCommand(game, settingsGUI, queueManager));
-        Objects.requireNonNull(getCommand("vote")).setExecutor(new VoteCommand(game));
+        BuildCommand buildCommand = new BuildCommand(game, settingsGUI, queueManager);
+        Objects.requireNonNull(getCommand("build")).setExecutor(buildCommand);
+        Objects.requireNonNull(getCommand("build")).setTabCompleter(buildCommand);
+
+        VoteCommand voteCommand = new VoteCommand(game);
+        Objects.requireNonNull(getCommand("vote")).setExecutor(voteCommand);
+        Objects.requireNonNull(getCommand("vote")).setTabCompleter(voteCommand);
 
         // Create arena world after 1 tick (worlds must be loaded first)
         getServer().getScheduler().runTaskLater(this, () -> game.getArenaWorld(), 1L);

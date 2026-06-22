@@ -8,12 +8,17 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
-import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.TabExecutor;
 import org.bukkit.entity.Player;
+import org.bukkit.util.StringUtil;
 import org.jetbrains.annotations.NotNull;
 
-public class BuildCommand implements CommandExecutor {
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
+
+public class BuildCommand implements TabExecutor {
 
     private final Game game;
     private final SettingsGUI settingsGUI;
@@ -167,5 +172,42 @@ public class BuildCommand implements CommandExecutor {
         int sec = seconds % 60;
         if (min > 0) return min + "m " + sec + "s";
         return sec + "s";
+    }
+
+    @Override
+    public List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
+        if (!(sender instanceof Player)) return List.of();
+
+        if (args.length == 1) {
+            List<String> subs = List.of("join", "leave", "queue", "test", "gui", "start", "stop", "addplayer", "status");
+            return StringUtil.copyPartialMatches(args[0], subs, new ArrayList<>());
+        }
+
+        if (args.length == 2) {
+            return switch (args[0].toLowerCase()) {
+                case "join" -> StringUtil.copyPartialMatches(args[1], List.of("solo", "team"), new ArrayList<>());
+                case "addplayer" -> {
+                    List<String> names = Bukkit.getOnlinePlayers().stream()
+                            .map(Player::getName)
+                            .collect(Collectors.toList());
+                    yield StringUtil.copyPartialMatches(args[1], names, new ArrayList<>());
+                }
+                default -> List.of();
+            };
+        }
+
+        if (args.length == 3) {
+            return switch (args[0].toLowerCase()) {
+                case "join" -> StringUtil.copyPartialMatches(args[2],
+                        List.of("30", "45", "60", "90", "120"), new ArrayList<>());
+                case "addplayer" -> {
+                    List<String> teams = List.of("Rot", "Blau", "Gruen", "Gelb");
+                    yield StringUtil.copyPartialMatches(args[2], teams, new ArrayList<>());
+                }
+                default -> List.of();
+            };
+        }
+
+        return List.of();
     }
 }
