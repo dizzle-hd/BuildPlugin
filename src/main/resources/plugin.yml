@@ -2,22 +2,25 @@ name: BuildPlugin
 version: 1.0.0
 main: de.julian.buildplugin.BuildPlugin
 api-version: "1.21"
-description: Build Battle Plugin mit 4 Spielern im 2x2 Grid
+description: Build Battle Plugin with queue system and void arena
 
 commands:
   build:
-    description: Hauptbefehl fuer das BuildPlugin
-    usage: /build <start|stop|gui>
-    permission: buildplugin.admin
+    description: Main BuildPlugin command
+    usage: /build <join|leave|queue|test|gui|start|stop|addplayer|status>
+    permission: buildplugin.use
   vote:
-    description: Abstimmen in der Voting-Phase
+    description: Vote for a build during voting phase
     usage: /vote <1-5>
     permission: buildplugin.vote
 
 permissions:
+  buildplugin.use:
+    description: Access to player commands (join, leave, queue, vote)
+    default: true
   buildplugin.admin:
-    description: Zugriff auf Admin-Befehle
+    description: Access to admin commands (start, stop, gui, addplayer, test)
     default: op
   buildplugin.vote:
-    description: Abstimmen erlaubt
+    description: Vote during voting phase
     default: true
