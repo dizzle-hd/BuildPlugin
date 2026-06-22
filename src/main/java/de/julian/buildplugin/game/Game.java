@@ -190,6 +190,28 @@ public class Game {
         broadcastAll(Component.text("Das Spiel wurde abgebrochen.", NamedTextColor.RED));
     }
 
+    /**
+     * Called on server shutdown. Cancels countdown and teleports players without scheduling any tasks.
+     */
+    public void onServerShutdown() {
+        if (countdownTask != null) countdownTask.cancel();
+        if (state == GameState.WAITING || state == GameState.ENDED) return;
+
+        World mainWorld = Bukkit.getWorlds().get(0);
+        for (Team team : teams) {
+            for (UUID uuid : team.getPlayers()) {
+                Player player = Bukkit.getPlayer(uuid);
+                if (player != null) {
+                    player.setAllowFlight(false);
+                    player.setFlying(false);
+                    player.teleport(mainWorld.getSpawnLocation());
+                }
+            }
+        }
+        teams.clear();
+        state = GameState.WAITING;
+    }
+
     public boolean submitVote(Player voter, int points) {
         if (state != GameState.VOTING) {
             voter.sendMessage(Component.text("Abstimmen ist nur in der Voting-Phase moeglich!", NamedTextColor.RED));

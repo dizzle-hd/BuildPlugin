@@ -47,7 +47,7 @@ public class BuildPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
-        if (game != null) game.stopGame();
+        if (game != null) game.onServerShutdown();
         if (queueManager != null) queueManager.shutdown();
         getLogger().info("BuildPlugin disabled.");
     }
