@@ -1,127 +1,137 @@
 package de.julian.buildplugin.manager;
 
-import de.julian.buildplugin.game.BuildArea;
-import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitRunnable;
-
-import java.util.List;
 
 public class WallManager {
 
     private final Plugin plugin;
     private final int wallHeight;
 
+    private static final int BASE_Y = AreaManager.BEDROCK_Y;
+
     public WallManager(Plugin plugin, int wallHeight) {
         this.plugin = plugin;
         this.wallHeight = wallHeight;
     }
 
-    public void placeOuterWalls(World world, int centerX, int centerZ, int totalSize) {
-        int half = totalSize / 2;
-        int minX = centerX - half;
-        int maxX = centerX + half;
-        int minZ = centerZ - half;
-        int maxZ = centerZ + half;
+    /**
+     * Places BARRIER blocks around the outer perimeter of the arena.
+     * These stay in place for the entire game (build phase + voting phase).
+     * Only removed when the game is fully stopped.
+     *
+     * Perimeter sits 1 block outside the plots:
+     *   X = centerX ± (areaSize + 1)
+     *   Z = centerZ ± (areaSize + 1)
+     */
+    public void placeOuterBarriers(World world, int centerX, int centerZ, int areaSize) {
+        int minX = centerX - areaSize - 1;
+        int maxX = centerX + areaSize + 1;
+        int minZ = centerZ - areaSize - 1;
+        int maxZ = centerZ + areaSize + 1;
 
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                for (int y = de.julian.buildplugin.manager.AreaManager.BEDROCK_Y; y < de.julian.buildplugin.manager.AreaManager.BEDROCK_Y + wallHeight; y++) {
-                    for (int x = minX; x <= maxX; x++) {
-                        setBlock(world, x, y, minZ, Material.BARRIER);
-                        setBlock(world, x, y, maxZ, Material.BARRIER);
-                    }
-                    for (int z = minZ; z <= maxZ; z++) {
-                        setBlock(world, minX, y, z, Material.BARRIER);
-                        setBlock(world, maxX, y, z, Material.BARRIER);
-                    }
+        scheduleFill(world, () -> {
+            for (int y = BASE_Y; y < BASE_Y + wallHeight; y++) {
+                for (int x = minX; x <= maxX; x++) {
+                    place(world, x, y, minZ, Material.BARRIER);
+                    place(world, x, y, maxZ, Material.BARRIER);
+                }
+                for (int z = minZ + 1; z < maxZ; z++) {
+                    place(world, minX, y, z, Material.BARRIER);
+                    place(world, maxX, y, z, Material.BARRIER);
                 }
             }
-        }.runTaskAsynchronously(plugin);
+        });
     }
 
-    public void removeOuterWalls(World world, int centerX, int centerZ, int totalSize) {
-        int half = totalSize / 2;
-        int minX = centerX - half;
-        int maxX = centerX + half;
-        int minZ = centerZ - half;
-        int maxZ = centerZ + half;
+    /**
+     * Removes the outer BARRIER perimeter. Called only on game stop/reset.
+     */
+    public void removeOuterBarriers(World world, int centerX, int centerZ, int areaSize) {
+        int minX = centerX - areaSize - 1;
+        int maxX = centerX + areaSize + 1;
+        int minZ = centerZ - areaSize - 1;
+        int maxZ = centerZ + areaSize + 1;
 
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                for (int y = de.julian.buildplugin.manager.AreaManager.BEDROCK_Y; y < de.julian.buildplugin.manager.AreaManager.BEDROCK_Y + wallHeight; y++) {
-                    for (int x = minX; x <= maxX; x++) {
-                        removeBarrier(world, x, y, minZ);
-                        removeBarrier(world, x, y, maxZ);
-                    }
-                    for (int z = minZ; z <= maxZ; z++) {
-                        removeBarrier(world, minX, y, z);
-                        removeBarrier(world, maxX, y, z);
-                    }
+        scheduleFill(world, () -> {
+            for (int y = BASE_Y; y < BASE_Y + wallHeight; y++) {
+                for (int x = minX; x <= maxX; x++) {
+                    clearBarrier(world, x, y, minZ);
+                    clearBarrier(world, x, y, maxZ);
+                }
+                for (int z = minZ + 1; z < maxZ; z++) {
+                    clearBarrier(world, minX, y, z);
+                    clearBarrier(world, maxX, y, z);
                 }
             }
-        }.runTaskAsynchronously(plugin);
+        });
     }
 
-    public void placeInnerWalls(World world, int centerX, int centerZ, int totalSize) {
-        int half = totalSize / 2;
-
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                for (int y = de.julian.buildplugin.manager.AreaManager.BEDROCK_Y; y < de.julian.buildplugin.manager.AreaManager.BEDROCK_Y + wallHeight; y++) {
-                    // Vertical divider (along Z axis at centerX)
-                    for (int z = centerZ - half; z <= centerZ + half; z++) {
-                        setBlock(world, centerX, y, z, Material.BARRIER);
-                    }
-                    // Horizontal divider (along X axis at centerZ)
-                    for (int x = centerX - half; x <= centerX + half; x++) {
-                        setBlock(world, x, y, centerZ, Material.BARRIER);
-                    }
+    /**
+     * Places RED_CONCRETE in the 1-block "+" divider between the 4 plots.
+     * Removed at the start of the voting phase so players can see all builds.
+     *
+     * "+" shape:
+     *   - Column at X = centerX  (from Z = centerZ-areaSize to centerZ+areaSize)
+     *   - Row    at Z = centerZ  (from X = centerX-areaSize to centerX+areaSize)
+     */
+    public void placeRedDivider(World world, int centerX, int centerZ, int areaSize) {
+        scheduleFill(world, () -> {
+            for (int y = BASE_Y; y < BASE_Y + wallHeight; y++) {
+                // Vertical bar (runs along Z at X=center)
+                for (int z = centerZ - areaSize; z <= centerZ + areaSize; z++) {
+                    place(world, centerX, y, z, Material.RED_CONCRETE);
+                }
+                // Horizontal bar (runs along X at Z=center)
+                for (int x = centerX - areaSize; x <= centerX + areaSize; x++) {
+                    place(world, x, y, centerZ, Material.RED_CONCRETE);
                 }
             }
-        }.runTaskAsynchronously(plugin);
+        });
     }
 
-    public void removeInnerWalls(World world, int centerX, int centerZ, int totalSize) {
-        int half = totalSize / 2;
-
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                for (int y = de.julian.buildplugin.manager.AreaManager.BEDROCK_Y; y < de.julian.buildplugin.manager.AreaManager.BEDROCK_Y + wallHeight; y++) {
-                    for (int z = centerZ - half; z <= centerZ + half; z++) {
-                        removeBarrier(world, centerX, y, z);
-                    }
-                    for (int x = centerX - half; x <= centerX + half; x++) {
-                        removeBarrier(world, x, y, centerZ);
-                    }
+    /**
+     * Removes the red "+" divider at the start of the voting phase.
+     */
+    public void removeRedDivider(World world, int centerX, int centerZ, int areaSize) {
+        scheduleFill(world, () -> {
+            for (int y = BASE_Y; y < BASE_Y + wallHeight; y++) {
+                for (int z = centerZ - areaSize; z <= centerZ + areaSize; z++) {
+                    clearMaterial(world, centerX, y, z, Material.RED_CONCRETE);
+                }
+                for (int x = centerX - areaSize; x <= centerX + areaSize; x++) {
+                    clearMaterial(world, x, y, centerZ, Material.RED_CONCRETE);
                 }
             }
-        }.runTaskAsynchronously(plugin);
+        });
     }
 
-    private void setBlock(World world, int x, int y, int z, Material material) {
+    // ── helpers ────────────────────────────────────────────────────────────────
+
+    private void scheduleFill(World world, Runnable blockOps) {
         new BukkitRunnable() {
             @Override
             public void run() {
-                world.getBlockAt(x, y, z).setType(material);
+                blockOps.run();
             }
         }.runTask(plugin);
     }
 
-    private void removeBarrier(World world, int x, int y, int z) {
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                if (world.getBlockAt(x, y, z).getType() == Material.BARRIER) {
-                    world.getBlockAt(x, y, z).setType(Material.AIR);
-                }
-            }
-        }.runTask(plugin);
+    private void place(World world, int x, int y, int z, Material mat) {
+        world.getBlockAt(x, y, z).setType(mat, false);
+    }
+
+    private void clearBarrier(World world, int x, int y, int z) {
+        if (world.getBlockAt(x, y, z).getType() == Material.BARRIER) {
+            world.getBlockAt(x, y, z).setType(Material.AIR, false);
+        }
+    }
+
+    private void clearMaterial(World world, int x, int y, int z, Material mat) {
+        if (world.getBlockAt(x, y, z).getType() == mat) {
+            world.getBlockAt(x, y, z).setType(Material.AIR, false);
+        }
     }
 }

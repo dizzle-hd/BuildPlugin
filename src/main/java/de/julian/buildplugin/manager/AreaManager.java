@@ -35,14 +35,16 @@ public class AreaManager {
     public List<BuildArea> createGrid(World world, int centerX, int centerZ, int areaSize) {
         List<BuildArea> areas = new ArrayList<>();
 
-        // Team 1: top-left   (negative X, negative Z)
-        areas.add(new BuildArea(world, centerX - areaSize - 1, centerX - 1, centerZ - areaSize - 1, centerZ - 1));
-        // Team 2: top-right  (positive X, negative Z)
-        areas.add(new BuildArea(world, centerX + 1, centerX + areaSize + 1, centerZ - areaSize - 1, centerZ - 1));
-        // Team 3: bottom-left (negative X, positive Z)
-        areas.add(new BuildArea(world, centerX - areaSize - 1, centerX - 1, centerZ + 1, centerZ + areaSize + 1));
-        // Team 4: bottom-right (positive X, positive Z)
-        areas.add(new BuildArea(world, centerX + 1, centerX + areaSize + 1, centerZ + 1, centerZ + areaSize + 1));
+        // 1-block gap at X=centerX and Z=centerZ holds the red divider wall.
+        // Each plot is exactly areaSize × areaSize blocks.
+        // Team 1: top-left
+        areas.add(new BuildArea(world, centerX - areaSize, centerX - 1, centerZ - areaSize, centerZ - 1));
+        // Team 2: top-right
+        areas.add(new BuildArea(world, centerX + 1, centerX + areaSize, centerZ - areaSize, centerZ - 1));
+        // Team 3: bottom-left
+        areas.add(new BuildArea(world, centerX - areaSize, centerX - 1, centerZ + 1, centerZ + areaSize));
+        // Team 4: bottom-right
+        areas.add(new BuildArea(world, centerX + 1, centerX + areaSize, centerZ + 1, centerZ + areaSize));
 
         return areas;
     }

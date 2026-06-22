@@ -80,9 +80,9 @@ public class Game {
             areaManager.generatePlatform(area);
         }
 
-        int totalSize = (areaSize + 1) * 2;
-        wallManager.placeOuterWalls(arenaWorld, CENTER_X, CENTER_Z, totalSize);
-        wallManager.placeInnerWalls(arenaWorld, CENTER_X, CENTER_Z, totalSize);
+        // Outer barriers stay for the whole game; red divider is removed at voting start
+        wallManager.placeOuterBarriers(arenaWorld, CENTER_X, CENTER_Z, areaSize);
+        wallManager.placeRedDivider(arenaWorld, CENTER_X, CENTER_Z, areaSize);
 
         // Give players a moment for platforms to generate before teleporting
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
@@ -109,9 +109,9 @@ public class Game {
 
         int areaSize = plugin.getConfig().getInt("game.area-size", 128);
         World arenaWorld = arenaWorldManager.getOrCreateArenaWorld();
-        int totalSize = (areaSize + 1) * 2;
 
-        wallManager.removeOuterWalls(arenaWorld, CENTER_X, CENTER_Z, totalSize);
+        // Remove red divider so players can see all builds — outer barriers stay
+        wallManager.removeRedDivider(arenaWorld, CENTER_X, CENTER_Z, areaSize);
 
         for (Team team : teams) {
             for (UUID uuid : team.getPlayers()) {
@@ -168,10 +168,9 @@ public class Game {
 
         int areaSize = plugin.getConfig().getInt("game.area-size", 128);
         World arenaWorld = arenaWorldManager.getOrCreateArenaWorld();
-        int totalSize = (areaSize + 1) * 2;
 
-        wallManager.removeOuterWalls(arenaWorld, CENTER_X, CENTER_Z, totalSize);
-        wallManager.removeInnerWalls(arenaWorld, CENTER_X, CENTER_Z, totalSize);
+        wallManager.removeOuterBarriers(arenaWorld, CENTER_X, CENTER_Z, areaSize);
+        wallManager.removeRedDivider(arenaWorld, CENTER_X, CENTER_Z, areaSize);
 
         World mainWorld = Bukkit.getWorlds().get(0);
         for (Team team : teams) {
