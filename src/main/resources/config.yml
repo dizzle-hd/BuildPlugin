@@ -1,7 +1,7 @@
 game:
   build-time: 3600
   voting-time: 600
-  area-size: 128
+  area-size: 64
   wall-height: 320
   mode: solo
   center-x: 0

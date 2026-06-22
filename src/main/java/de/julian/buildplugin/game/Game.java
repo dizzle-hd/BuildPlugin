@@ -36,6 +36,7 @@ public class Game {
     private static final int CENTER_Z = 0;
 
     private BukkitTask countdownTask;
+    private BukkitTask actionBarTask;
     private int remainingSeconds;
 
     public Game(Plugin plugin) {
@@ -102,6 +103,7 @@ public class Game {
         broadcastAll(Component.text("=== BUILD PHASE GESTARTET ===", NamedTextColor.GOLD));
         state = GameState.BUILDING;
         startCountdown(buildTime, this::startVotingPhase);
+        startActionBar();
     }
 
     public void startVotingPhase() {
@@ -132,6 +134,7 @@ public class Game {
 
     public void endGame() {
         if (countdownTask != null) countdownTask.cancel();
+        if (actionBarTask != null) actionBarTask.cancel();
         state = GameState.ENDED;
 
         teams.sort((a, b) -> b.getScore() - a.getScore());
@@ -165,6 +168,7 @@ public class Game {
 
     public void stopGame() {
         if (countdownTask != null) countdownTask.cancel();
+        if (actionBarTask != null) actionBarTask.cancel();
 
         int areaSize = plugin.getConfig().getInt("game.area-size", 128);
         World arenaWorld = arenaWorldManager.getOrCreateArenaWorld();
@@ -194,6 +198,7 @@ public class Game {
      */
     public void onServerShutdown() {
         if (countdownTask != null) countdownTask.cancel();
+        if (actionBarTask != null) actionBarTask.cancel();
         if (state == GameState.WAITING || state == GameState.ENDED) return;
 
         World mainWorld = Bukkit.getWorlds().get(0);
@@ -260,6 +265,45 @@ public class Game {
             if (team.hasPlayer(uuid)) return team;
         }
         return null;
+    }
+
+    private void startActionBar() {
+        if (actionBarTask != null) actionBarTask.cancel();
+        actionBarTask = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+            if (state == GameState.WAITING || state == GameState.ENDED) {
+                actionBarTask.cancel();
+                return;
+            }
+            Component bar = buildActionBar();
+            for (Team team : teams) {
+                for (UUID uuid : team.getPlayers()) {
+                    Player player = Bukkit.getPlayer(uuid);
+                    if (player != null) player.sendActionBar(bar);
+                }
+            }
+        }, 0L, 20L);
+    }
+
+    private Component buildActionBar() {
+        if (state == GameState.BUILDING) {
+            return Component.text()
+                    .append(Component.text("Build Phase", NamedTextColor.GREEN))
+                    .append(Component.text(" | ", NamedTextColor.DARK_GRAY))
+                    .append(Component.text("Time left: ", NamedTextColor.GRAY))
+                    .append(Component.text(formatTime(remainingSeconds), NamedTextColor.YELLOW))
+                    .build();
+        }
+        if (state == GameState.VOTING) {
+            return Component.text()
+                    .append(Component.text("Voting Phase", NamedTextColor.GOLD))
+                    .append(Component.text(" | ", NamedTextColor.DARK_GRAY))
+                    .append(Component.text("Time left: ", NamedTextColor.GRAY))
+                    .append(Component.text(formatTime(remainingSeconds), NamedTextColor.YELLOW))
+                    .append(Component.text(" | ", NamedTextColor.DARK_GRAY))
+                    .append(Component.text("Stand on a plot & /vote <1-5>", NamedTextColor.WHITE))
+                    .build();
+        }
+        return Component.empty();
     }
 
     private void startCountdown(int seconds, Runnable onFinish) {
