@@ -104,8 +104,7 @@ public class Game {
                     Player player = Bukkit.getPlayer(uuid);
                     if (player != null) {
                         areaManager.teleportToArea(player, team.getArea());
-                        player.setGameMode(GameMode.SURVIVAL);
-                        player.setAllowFlight(false);
+                        player.setGameMode(GameMode.CREATIVE);
                         player.sendMessage(Component.text("Das Spiel beginnt! Du hast " + formatTime(buildTime) + " zum Bauen!", NamedTextColor.GREEN));
                         showThemeTitle(player);
                     }
@@ -172,6 +171,7 @@ public class Game {
                 for (UUID uuid : team.getPlayers()) {
                     Player player = Bukkit.getPlayer(uuid);
                     if (player != null) {
+                        player.setGameMode(GameMode.SURVIVAL);
                         player.setAllowFlight(false);
                         player.setFlying(false);
                         player.teleport(mainWorld.getSpawnLocation());
@@ -194,6 +194,7 @@ public class Game {
             for (UUID uuid : team.getPlayers()) {
                 Player player = Bukkit.getPlayer(uuid);
                 if (player != null) {
+                    player.setGameMode(GameMode.SURVIVAL);
                     player.setAllowFlight(false);
                     player.setFlying(false);
                     player.teleport(mainWorld.getSpawnLocation());
@@ -222,6 +223,7 @@ public class Game {
             for (UUID uuid : team.getPlayers()) {
                 Player player = Bukkit.getPlayer(uuid);
                 if (player != null) {
+                    player.setGameMode(GameMode.SURVIVAL);
                     player.setAllowFlight(false);
                     player.setFlying(false);
                     player.teleport(mainWorld.getSpawnLocation());
