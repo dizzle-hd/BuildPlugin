@@ -165,7 +165,7 @@ public class Game {
             rank++;
         }
 
-        // Teleport players back to main world after 10 seconds
+        // Teleport players back to main world after 10 seconds, then reset the arena
         World mainWorld = Bukkit.getWorlds().get(0);
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             for (Team team : teams) {
@@ -180,18 +180,14 @@ public class Game {
             }
             teams.clear();
             state = GameState.WAITING;
+            // Wipe all builds & walls by regenerating a fresh void arena
+            arenaWorldManager.resetArenaWorld();
         }, 200L); // 10 seconds
     }
 
     public void stopGame() {
         if (countdownTask != null) countdownTask.cancel();
         if (actionBarTask != null) actionBarTask.cancel();
-
-        int areaSize = plugin.getConfig().getInt("game.area-size", 128);
-        World arenaWorld = arenaWorldManager.getOrCreateArenaWorld();
-
-        wallManager.removeOuterBarriers(arenaWorld, CENTER_X, CENTER_Z, areaSize);
-        wallManager.removeRedDivider(arenaWorld, CENTER_X, CENTER_Z, areaSize);
 
         World mainWorld = Bukkit.getWorlds().get(0);
         for (Team team : teams) {
@@ -204,6 +200,9 @@ public class Game {
                 }
             }
         }
+
+        // Wipe all builds & walls by regenerating a fresh void arena
+        arenaWorldManager.resetArenaWorld();
 
         state = GameState.WAITING;
         teams.clear();
