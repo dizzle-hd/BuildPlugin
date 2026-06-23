@@ -2,15 +2,19 @@ package de.julian.buildplugin.game;
 
 import de.julian.buildplugin.manager.AreaManager;
 import de.julian.buildplugin.manager.WallManager;
+import de.julian.buildplugin.theme.ThemeManager;
 import de.julian.buildplugin.world.ArenaWorldManager;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.title.Title;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitTask;
+
+import java.time.Duration;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -22,6 +26,7 @@ public class Game {
     private final AreaManager areaManager;
     private WallManager wallManager;
     private final ArenaWorldManager arenaWorldManager;
+    private final ThemeManager themeManager;
 
     private GameState state = GameState.WAITING;
     private final List<Team> teams = new ArrayList<>();
@@ -45,6 +50,7 @@ public class Game {
         loadConfig();
         this.areaManager = new AreaManager(plugin);
         this.wallManager = new WallManager(plugin, wallHeight);
+        this.themeManager = new ThemeManager(plugin);
     }
 
     private void loadConfig() {
@@ -70,6 +76,9 @@ public class Game {
 
         int areaSize = plugin.getConfig().getInt("game.area-size", 64);
         World arenaWorld = arenaWorldManager.getOrCreateArenaWorld();
+
+        // Pick a random category + topic for this round
+        themeManager.pickRandomTheme();
 
         List<BuildArea> areas = areaManager.createGrid(arenaWorld, CENTER_X, CENTER_Z, areaSize);
 
@@ -98,12 +107,17 @@ public class Game {
                         player.setGameMode(GameMode.SURVIVAL);
                         player.setAllowFlight(false);
                         player.sendMessage(Component.text("Das Spiel beginnt! Du hast " + formatTime(buildTime) + " zum Bauen!", NamedTextColor.GREEN));
+                        showThemeTitle(player);
                     }
                 }
             }
         }, 40L); // 2 second delay for platform generation
 
         broadcastAll(Component.text("=== BUILD PHASE GESTARTET ===", NamedTextColor.GOLD));
+        broadcastAll(Component.text("Kategorie: ", NamedTextColor.GRAY)
+                .append(Component.text(themeManager.getCurrentCategory(), NamedTextColor.AQUA)));
+        broadcastAll(Component.text("Dein Thema: ", NamedTextColor.GRAY)
+                .append(Component.text(themeManager.getCurrentTopic(), NamedTextColor.GREEN)));
         state = GameState.BUILDING;
         startCountdown(buildTime, this::startVotingPhase);
         startActionBar();
@@ -270,6 +284,19 @@ public class Game {
         return null;
     }
 
+    private void showThemeTitle(Player player) {
+        Title title = Title.title(
+                Component.text(themeManager.getCurrentTopic(), NamedTextColor.GREEN),
+                Component.text("Kategorie: " + themeManager.getCurrentCategory(), NamedTextColor.AQUA),
+                Title.Times.times(Duration.ofMillis(500), Duration.ofSeconds(4), Duration.ofMillis(1000))
+        );
+        player.showTitle(title);
+    }
+
+    public ThemeManager getThemeManager() {
+        return themeManager;
+    }
+
     private void startActionBar() {
         if (actionBarTask != null) actionBarTask.cancel();
         actionBarTask = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
@@ -290,7 +317,8 @@ public class Game {
     private Component buildActionBar() {
         if (state == GameState.BUILDING) {
             return Component.text()
-                    .append(Component.text("Build Phase", NamedTextColor.GREEN))
+                    .append(Component.text("Thema: ", NamedTextColor.GRAY))
+                    .append(Component.text(themeManager.getCurrentTopic(), NamedTextColor.GREEN))
                     .append(Component.text(" | ", NamedTextColor.DARK_GRAY))
                     .append(Component.text("Time left: ", NamedTextColor.GRAY))
                     .append(Component.text(formatTime(remainingSeconds), NamedTextColor.YELLOW))

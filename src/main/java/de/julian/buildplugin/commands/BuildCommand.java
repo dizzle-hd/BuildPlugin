@@ -137,6 +137,18 @@ public class BuildCommand implements TabExecutor {
                         NamedTextColor.AQUA));
             }
 
+            case "theme" -> {
+                if (game.getThemeManager().hasTheme()
+                        && (game.getState() == GameState.BUILDING || game.getState() == GameState.VOTING)) {
+                    player.sendMessage(Component.text("Kategorie: ", NamedTextColor.GRAY)
+                            .append(Component.text(game.getThemeManager().getCurrentCategory(), NamedTextColor.AQUA)));
+                    player.sendMessage(Component.text("Dein Thema: ", NamedTextColor.GRAY)
+                            .append(Component.text(game.getThemeManager().getCurrentTopic(), NamedTextColor.GREEN)));
+                } else {
+                    player.sendMessage(Component.text("Aktuell laeuft kein Spiel mit einem Thema.", NamedTextColor.YELLOW));
+                }
+            }
+
             case "status" -> {
                 player.sendMessage(Component.text("=== BuildPlugin Status ===", NamedTextColor.GOLD));
                 player.sendMessage(Component.text("State: " + game.getState(), NamedTextColor.WHITE));
@@ -159,6 +171,7 @@ public class BuildCommand implements TabExecutor {
         player.sendMessage(Component.text("/build join <solo|team> [minutes] - Join the queue", NamedTextColor.WHITE));
         player.sendMessage(Component.text("/build leave - Leave the queue", NamedTextColor.WHITE));
         player.sendMessage(Component.text("/build queue - Show active queues", NamedTextColor.WHITE));
+        player.sendMessage(Component.text("/build theme - Show the current build theme", NamedTextColor.WHITE));
         player.sendMessage(Component.text("/build test - Start a test game (admin)", NamedTextColor.WHITE));
         player.sendMessage(Component.text("/build gui - Settings GUI (admin)", NamedTextColor.WHITE));
         player.sendMessage(Component.text("/build start - Start game manually (admin)", NamedTextColor.WHITE));
@@ -179,7 +192,7 @@ public class BuildCommand implements TabExecutor {
         if (!(sender instanceof Player)) return List.of();
 
         if (args.length == 1) {
-            List<String> subs = List.of("join", "leave", "queue", "test", "gui", "start", "stop", "addplayer", "status");
+            List<String> subs = List.of("join", "leave", "queue", "theme", "test", "gui", "start", "stop", "addplayer", "status");
             return StringUtil.copyPartialMatches(args[0], subs, new ArrayList<>());
         }
 
