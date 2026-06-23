@@ -68,17 +68,20 @@ public class Game {
         if (state != GameState.WAITING) return;
         if (teams.isEmpty()) return;
 
-        int areaSize = plugin.getConfig().getInt("game.area-size", 128);
+        int areaSize = plugin.getConfig().getInt("game.area-size", 64);
         World arenaWorld = arenaWorldManager.getOrCreateArenaWorld();
 
         List<BuildArea> areas = areaManager.createGrid(arenaWorld, CENTER_X, CENTER_Z, areaSize);
 
-        for (int i = 0; i < teams.size(); i++) {
-            Team team = teams.get(i);
-            BuildArea area = areas.get(i % areas.size());
-            team.setArea(area);
-            // Generate the flat platform for this team's area
+        // Always generate ALL 4 platforms so the arena is complete and symmetric,
+        // even when fewer than 4 teams are playing (e.g. /build test).
+        for (BuildArea area : areas) {
             areaManager.generatePlatform(area);
+        }
+
+        // Assign the present teams to the first available plots.
+        for (int i = 0; i < teams.size(); i++) {
+            teams.get(i).setArea(areas.get(i % areas.size()));
         }
 
         // Outer barriers stay for the whole game; red divider is removed at voting start
